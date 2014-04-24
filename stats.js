@@ -51,6 +51,12 @@ var stats = Class.extend({
         // Sort functions
         sortNumbers: function (a, b) { return a - b },
         
+        // Round Number
+        round: function (val, n) { return parseFloat(Math.round(val * Math.pow(10, n)) / Math.pow(10, n)); },
+        
+        // Sign of number
+        sign: function (x) { return x > 0 ? 1 : x < 0 ? -1 : 0; },
+        
         // Check functions
         isPair: function (iValue) {
             if ((iValue / 2) == parseInt(iValue / 2)) { return true; } else { return false; }
@@ -206,6 +212,35 @@ var stats = Class.extend({
         return this._data;
     },
    
+    setConfidenceProbability : function (p) {
+        if (p > 1 || p < 0) { console.warn('error: bad parameter'); }
+        this.results.confidence = {};
+        this.results.confidence.probability = p;
+        return p;
+    },
+    
+    setQuantiles: function (o) {
+        var n      = o.nb, // number of quantiles
+            method = o.method, // Method
+            ext    = o.withExtremities; // with extremities
+            
+        if (!method) { method = 1;     }
+        if (!ext)    { ext    = false; }
+        
+        this.results.quantiles = {};
+        
+        this.results.quantiles.nb = n;
+        this.results.quantiles.calc_method = method;
+        this.results.quantiles.w_extremities = ext;
+    },
+   
+    
+    /*
+        
+        CALCULATION FUNCTIONS
+    
+    */
+    
     count: function () {
         this.results.count = this._data.length;
         return this.results.count;
@@ -490,21 +525,105 @@ var stats = Class.extend({
         return p;   
     },
     
+    quantile: function (q, method, withExtremities) {
+        var population = this._data.slice(),
+            q = this.results.quantiles.nb,
+            method = this.results.quantiles.calc_method,
+            withExtremities = this.results.quantiles.w_extremities,
+            ctx = this,
+            k, p, q_re,
+            q_quantile = [], m = [];
+        
+        // 1. Order population
+        population.sort(ctx.core.sortNumbers);
+        
+        // 2. Length of population
+        var N = population.length;
+        
+        // 3. Choice of method
+        if (!method || method < 1 || method > 9) { method = 1; }
+        
+        // Definitions of methods
+        m.push(function (p) { // Method 1
+            /*
+                Inverse of empirical distribution function.
+                When p = 0, use x1.
+            */
+            var h = N * p + 1/2;
+            
+            if (p==0) { return population[0]; }
+            
+            return population[Math.ceil(h - 1/2) - 1];
+        });
+        
+        m.push(function (p) { // Method 2 // KO
+            /*
+                The same as R-1, but with averaging at discontinuities.
+                When p = 0, x1.
+                When p = 1, use xN.
+            */
+            var h = N * p + 1/2;
+            
+            if (p==0) { return population[0]; }
+            if (p==1) { return population[N - 1]; }
+            
+            return (population[Math.ceil(h - 1/2) - 1] + population[Math.floor(h + 1/2) - 1]) / 2;
+        });
+        
+        m.push(function (p) { // Method 3 // KO
+            /*
+                The observation numbered closest to Np.
+                When p = (1/2) / N, use x1.
+            */
+            var h = N * p;
+            
+            if (p <= ((1/2)/N)) { return population[0]; }
+            
+            return population[ctx.core.round(h,0) - 1];
+        });
+        
+        if (q > 100) { q = 100; }
+        
+        for (k = 0; k <= q; k++) {
+            // Calc p
+            p = k / q;
+            q_quantile.push(m[method - 1](p));
+        }
+        
+        if (withExtremities != true) {
+            var _length = q_quantile.length;
+            q_re = q_quantile;
+            q_quantile = [];
+            
+            for (k=1; k<_length - 1; k++) { q_quantile.push(q_re[k]); }
+        }
+        
+        this.results.quantiles.data = q_quantile;
+        return q_quantile;
+    },
+    
     prob_values: function () {
         var data = this.core.percent_values.slice(),
             n = data.length,
             esp = this.mean(),
             ec = this.stDev(),
-            i, r1 = [], r2 = [];
+            i, r1 = [], r2 = [],
+            range, min, max,
+            offset = s.core.normalStdInverse(0.999);
         
-        for (i=0; i<n; i++) { r1.push({ x: this.core.normalStdInverse(data[i]/100)*ec+esp, y: data[i]}); }
+        for (i=0; i<n; i++) { r1.push(this.core.normalStdInverse(data[i]/100)*ec+esp); }
        
         data = this._data.slice();
         data.sort(this.core.sortNumbers);
         
         n = data.length;
+        range = this.range();
+        min = this.min();
+        max = this.max();
         
-        for (i=0; i<n; i++) { r2.push(this.core.standardNormalCDF((data[i] - esp)/ec)*100); }
+        for (i=0; i<n; i++) {
+            r2.push(this.core.normale(data[i], esp, ec));
+        }
         //this.core.standardNormalCDF((m - esp)/ec)*100
         this.results.prob_values = {
             theorical: r1.slice(),
@@ -512,6 +631,38 @@ var stats = Class.extend({
         };
         
         return this.results.prob_values;
+    },
+    
+    inverf: function (x) {
+        /* error function inverse calc */
+        /* Use approximation by serie expansion */
+        var out,
+            a = 0.147,
+            tm = Math.log(1-Math.pow(x,2)) / 2,
+            tma = Math.log(1-Math.pow(x,2)) / a,
+            two_pi_a = 2 / (Math.PI * a);
+        
+        out = Math.pow(two_pi_a + tm, 2) - tma;
+        out = Math.sqrt(out) - (two_pi_a + tm);
+        out = this.core.sign(x) * Math.sqrt(out);
+                
+        return out;
+    },
+    
+    quantile025normal: function (p) {
+        return Math.sqrt(2) * this.inverf(p);
+    },
+    
+    confidence_interval: function () {
+        /* Calculate confidence interval for arr given in parameter */
+        var p   = this.results.confidence.probability,
+            avg = this.mean(),
+            ec  = this.stDev(),
+            n   = this.results.count,
+            q   = this.quantile025normal(p);
+        
+        this.results.confidence.interval = [avg - q*ec/Math.sqrt(n), avg + q*ec/Math.sqrt(n)];
+        return this.results.confidence.interval;
     },
     
     cpk: function (tolMin, tolMax) {
@@ -553,8 +704,10 @@ var stats = Class.extend({
         this.SEMean();
         this.coefVar();
         this.variance();
+        this.confidence_interval();
         this.Anderson_Darling();
         this.p_value();
+        this.quantile();
         this.prob_values();
         
         // Stop chrono

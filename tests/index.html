@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+  <head>
+    <meta name="Content-Type" charset="text/html" />
+    <meta name="language" content="fr" />
+    <meta name="charset" content="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Tests pour Stats.js" />
+    <meta name="author" content="DELTADORE\Liorzou Etienne" />
+    <link rel="shortcut icon" href="../assets/ico/favicon.png" />
+    <link href="bootstrap.min.css" rel="stylesheet" type="text/css" />
+    <title>
+      Test de Stats.js
+    </title>
+    
+    <style>
+        div.graphs svg {
+            height: 500px;
+        }
+        
+        .stats {
+            /* max-height: 480px;
+            overflow-y: scroll; */
+        }
+        
+        .panel { visibility: hidden; }
+    </style>
+  </head>
+  <body>
+    <div id="wrap">
+      <div class="container">
+        
+        <pre class="stats">
+        
+        </pre>
+        
+        <div class="panel panel-default">
+            <div class="panel-body">
+                <div class="graphs">
+                    <svg></svg>
+                </div>
+            </div>
+        </div>
+        
+        
+      </div>
+    </div>
+    <div class="footer"></div>
+    <div>
+      <script src="jquery.min.js"></script>
+      <script src="bootstrap.min.js"></script>
+      
+      <!-- Statistics tools -->
+      <script src="../stats.js"></script>
+      <script>
+        
+      </script>
+      
+      <script src="../libs/d3.min.js"></script>
+      <script src="../libs/nv.d3.min.js"></script>
+      <script src="../graphs.js"></script>
+      <script>
+        
+        var s = new stats();
+        
+        //var data = [9.9780, 11.0448, 9.4312, 9.5761, 10.0201, 9.3630, 10.7418, 9.6652, 10.3089, 8.1759, 8.9222, 8.2596, 8.0293, 10.1205, 10.0504, 9.0463, 11.3820, 10.1265, 10.4465, 10.1128, 8.3452, 11.4158, 9.4043, 12.1997, 9.2713, 10.7335, 10.1881, 9.9943, 10.1545, 8.8215, 9.4061, 10.6701, 10.3483, 10.3928, 10.6762, 10.4675, 10.6908, 9.6001, 8.4135, 9.6681, 9.1391, 9.8619, 11.4390, 8.1109, 8.2271, 9.5426, 9.9962, 7.5720, 8.7919, 10.9210, 10.8575, 10.4066, 10.8584, 11.0314, 10.8579, 12.0030, 11.0577, 10.8759, 10.1458, 10.6204, 9.7897, 9.1488, 9.5170, 11.3177, 8.0543, 9.5484, 10.2171, 10.0144, 10.3378, 9.7413, 8.4686, 11.5847, 10.2111, 10.5793, 9.0554, 11.1185, 11.6361, 9.1867, 12.7398, 10.0818, 9.4208, 10.5789, 9.9896, 9.0839, 10.0937, 11.1975, 9.8051, 10.2895, 10.7386, 9.5874, 10.9569, 10.2201, 9.2246, 10.3157, 9.4658, 11.9657, 9.3879, 10.3391, 8.9280, 10.8219 ];
+        var data = [1,2,3,3,4,4,4,4,5,5,5,5,6,6,6,7,7,8,9,10];
+
+        s.populate(data);
+        s.setConfidenceProbability(.98);
+        s.setQuantiles({nb: 4});
+        s.executeAll();
+        
+        $('pre.stats').html(JSON.stringify(s.results, null, 4));
+        
+        /*
+        var g = new graphs();
+        
+        g.probability({
+            selector: 'div.graphs svg',
+            data: [
+                {
+                    values: s.results.prob_values.theorical,
+                    key: "Diag. prob. theo."
+                },
+                {
+                    values: s.results.prob_values.calc,
+                    key: "Diag. prob. calc."
+                }
+            ]
+        });
+        */
+        //$('div.graphs').html(JSON.stringify(s.results, null, 4));
+        
+      </script>
+      
+    </div>
+  </body>
+</html>
