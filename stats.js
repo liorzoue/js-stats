@@ -5,12 +5,16 @@
  * --- 
  * Statistical library written in JS
  * 
- * Tested on : Chrome 30+, IE8
+ * Tested on : Chrome 30+, Safari 7, IE8
  *
  * Author : E. Liorzou (github.com/liorzoue)
- * Licence : MIT
+ * Licence : GNU
  * 
  * Changelog :
+ * 
+ * v 0.1.20140429
+ *      - update licence
+ *      - update "tested on"
  * 
  * v 0.1.20140428
  *      - First changelog ;)
