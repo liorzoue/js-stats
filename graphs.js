@@ -1,79 +1,166 @@
 "use strict";
 
-/***
- *
- * Base class
- *
- */
-if (!Class) {
-    var Class = function() {
-        this.initialize && this.initialize.apply(this, arguments);
-    };
-}
+/*
+    Graphs
+    
+    v 0.1.20140428
+        - First version
+        - Extend stats.js
+        - Draw statisticals graphs
+            * Probability diagram
+            * Histogram
+*/
+var graphs = stats.extend({
+    
+    diagram: function (o) {
+        /*
+         * Draw probability diagram
+         */
+         
+        /**
+         * Default option values :
+         * {
+         *      title:       'histogram',
+         *      container:   'graphs'
+         * }
+         *
+         * Adjustement chart is calculate on 100 values
+         **/
+        
+        /* Define object o if undefined */
+        o ? o : {};
+        
+        /* Default values for options */
+        o.title         = o.title         ? o.title       : 'probability diagram'   ;
+        o.container     = o.container     ? o.container   : 'graphs'                ;
+        
+        var d    = this.results.dataSorted.slice(),
+            p    = this.prob_values(),
+            n    = this.results.count,
+            ec   = this.stDev(),
+            esp  = this.mean(),
+            
+            d0   = [],
+            d1   = [],
+            
+            graph,
+            container = document.getElementById(o.container);
+            
+        container.innerHTML = ''; /* empty inner html */
 
-if (!Class.extend) {
-    Class.extend = function(childPrototype) {
-        var parent = this;
-        var child = function() { return parent.apply(this, arguments); };
-        child.extend = parent.extend;
-        var Surrogate = function() {};
-        Surrogate.prototype = parent.prototype;
-        child.prototype = new Surrogate;
-        for(var key in childPrototype){ child.prototype[key] = childPrototype[key]; }
-        return child;
-    };
-}
-
-if (!nv) { console.warn('graphs.js need nv.d3.js (https://github.com/novus/nvd3)'); }
-
-var graphs = Class.extend({
-    probability: function (o) {
-        function sinAndCos() {
-            var cos = [];
-
-            for (var i = 0; i < 100; i++) {
-                cos.push({x: i, y: 1 * Math.cos(i/10)});
-            }
-
-            return [
-                {
-                    values: cos,
-                    key: "Cosine Wave",
-                    color: "#2ca02c"
-                }
-            ];
+        /* Place values on graph */
+        for (var i=0; i<n; i++) {
+            var x = d[i];
+            var y = this.core.normalStdInverse(p.values[i]);
+            
+            d0.push([x, y]);
         }
         
-        nv.addGraph(function() {
-            var chart = nv.models.scatterChart()
-                .showDistX(true)
-                .showDistY(true).options({
-                margin: {left: 90, bottom: 50},
-                showXAxis: true,
-                showYAxis: true,
-                showDistX: true, 
-                transitionDuration: 250
-            });
-
-            chart.xAxis
-                .axisLabel("Données")
-                .tickFormat(d3.format(',.4f'));
-                
-            chart.yAxis
-                .axisLabel('Pourcentage')
-                .tickFormat(d3.format(',.1f'));
-
-            //chart.yScale(d3.scale.pow().exponent(.25));
+        
+        n = this.core.percent_values.length;
+        
+        /* Theorical values */
+        for (var i = 0; i<n; i++) {
+            var x = this.core.normalStdInverse(this.core.percent_values[i]/100)*ec+esp;
+            var y = this.core.normalStdInverse(this.core.percent_values[i]/100);
             
-            d3.select(o.selector)
-                .datum(o.data)
-                .call(chart);
-
-            nv.utils.windowResize(chart.update);
-
-            //chart.dispatch.on('stateChange', function(e) { nv.log('New State:', JSON.stringify(e)); });
-
-            return chart;
-        });
+            d1.push([x, y]);
+        }
+        
+        /* Draw graph with Flotr */
+        try {
+            graph = Flotr.draw(
+                container, [ 
+                    { data : d1 },
+                    { data: d0,   points: { show: true,  shadowSize : 0 } }, 
+                ],
+                { title: o.title, mouse:  { track: true, relative: true } }
+            );
+        } catch (e) {
+            console.warn(e);
+            container.innerHTML = '<div class="alert alert-danger"><strong>Erreur</strong> '+e.message+'</div>';
+        }
+    },
+    
+    histogram: function (o) {
+        /*
+         * Draw histogram
+         * 
+         * Use a histogram to visualize distribution of data
+         */
+         
+        /**
+         * Default option values :
+         * {
+         *      nbIntervals: 10,
+         *      title:       'histogram',
+         *      container:   'graphs'
+         * }
+         *
+         * Adjustement chart is calculate on 100 values
+         **/
+        
+        /* Define object o if undefined */
+        o ? o : {};
+        
+        /* Default values for options */
+        o.nbIntervals   = o.nbIntervals   ? o.nbIntervals : 10            ;
+        o.title         = o.title         ? o.title       : 'histogram'   ;
+        o.container     = o.container     ? o.container   : 'graphs'      ;
+        
+        var 
+            container,
+            graph,
+            d       = this.histo_values(o.nbIntervals),
+            width   = d.width,
+            d1      = [],
+            d2      = [],
+            
+            ec      = this.stDev(),
+            esp     = this.mean(),
+            n       = this.results.count,
+            min     = this.core.normalStdInverse(this.core.percent_values[0]/100)*ec+esp,
+            max     = this.core.normalStdInverse(this.core.percent_values[this.core.percent_values.length-1]/100)*ec+esp,
+            range   = max-min;
+        
+        /* Obtain container */
+        container = document.getElementById(o.container);
+        container.innerHTML = ''; /* empty inner html */
+        
+        /* group values into intervals */
+        for (var i=0; i<o.nbIntervals; i++) {
+            var x = (d.intervals[i].max+d.intervals[i].min)/2;
+            var y = d.intervals[i].n;
+            
+            d1.push([x, y]);
+        }
+        
+        /* generate normal gaussian */
+        for (var i=0; i<100; i++) {
+            var x = min+i*range/100;
+            var y = ec*(n/2)*this.core.normale(x, esp, ec);
+            
+            d2.push([x, y]);
+        }
+        
+        /* Draw graph with Flotr */
+        try {
+            graph = Flotr.draw(
+                container,
+                [
+                    { data: d1, bars:   { show: true, barWidth: width, shadowSize : 0 } },
+                    { data: d2, lines:  { show: true }                                  }
+                ],
+                {
+                    title: o.title,
+                    yaxis: { min: 0,        autoscaleMargin: 1  },
+                    mouse: { track : true,  relative : true     },
+                    xaxis: { min: min,      max: max            }
+                }
+            );
+        } catch (e) {
+            console.warn(e);
+            container.innerHTML = '<div class="alert alert-danger"><strong>Erreur</strong> '+e.message+'</div>';
+        }
     }
 });

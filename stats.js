@@ -1,18 +1,77 @@
 "use strict";
 
 /***
+ * Stats.js
+ * --- 
+ * Statistical library written in JS
+ * 
+ * Tested on : Chrome 30+, IE8
  *
- * Base class
- *
+ * Author : E. Liorzou (github.com/liorzoue)
+ * Licence : MIT
+ * 
+ * Changelog :
+ * 
+ * v 0.1.20140428
+ *      - First changelog ;)
+ *      - Features at this state :
+ *          * browser : detect browser user agent
+ *          * core :
+ *              Constants
+ *              percent values
+ *              sort numbers
+ *              round number
+ *              sign
+ *              is a number pair
+ *              truncate number
+ *              normal law
+ *              cdf (cumulative normal law)
+ *              inverse normal law
+ *          * populate: populate data array
+ *          * setConfidenceProbability: Set probability for confidence interval (.95 by default)
+ *          * setQuantiles: {
+ *                  nb: nb of quantiles,
+ *                  method: calc method (1 (default)|2|3)
+ *                  withExtremities: (true|false) add or not quantiles at extremities
+ *              }
+ *          * count: nb of data values
+ *          * min: min value of dataset
+ *          * max: max value of dataset
+ *          * range: max value minus min value
+ *          * sum
+ *          * mean
+ *          * trMean: mean of dataset without the 5% top and 5% bottom values
+ *          * median
+ *          * variance
+ *          * quantile
+ *          * Q1: 1st Quartile
+ *          * Q3: 3rd Quartile
+ *          * IQR: Q3-Q1
+ *          * stDev: Standart deviation
+ *          * SEMean: Standard error of the mean
+ *          * coefVar: Coefficient of variation
+ *          * Anderson_Darling: Coefficient for normality test
+ *          * p_value
+ *          * prob_values: calculate values for diagram
+ *              4 methods : 'benard', 'herd-johnson', 'hazen', 'kaplan-meier'
+ *          * histo_values: group values by intervals
+ *          * inverf: error function inverse
+ *          * quantile025normal
+ *          * confidence_interval
+ *          * cp
+ *          * cpk
+ *          * LCI
+ *          * LCS
  */
-if (!Class) {
-    var Class = function() {
+ 
+if (!stats) {
+    var stats = function() {
         this.initialize && this.initialize.apply(this, arguments);
     };
 }
 
-if (!Class.extend) {
-    Class.extend = function(childPrototype) {
+if (!stats.extend) {
+    stats.extend = function(childPrototype) {
         var parent = this;
         var child = function() { return parent.apply(this, arguments); };
         child.extend = parent.extend;
@@ -30,8 +89,36 @@ if (!Class.extend) {
  * 
  * author : E. Liorzou
  * 
+ * Functions : 
+ * 
+ * Populate :
+ *  Add data to Array
+ *
+ * 
  */
-var stats = Class.extend({
+stats = stats.extend({
+    browser: function () {
+        /**
+         * Detect user agent
+         * 
+         * Return an object with (true|false) for each
+         **/
+        var userAgent = navigator.userAgent.toLowerCase();
+        
+        var browser = {
+           userAgent: userAgent,
+           chrome: /chrome/.test( userAgent ),
+           safari: /webkit/.test( userAgent ) && !/chrome/.test( userAgent ),
+           opera: /opera/.test( userAgent ),
+           msie: /msie/.test( userAgent ) && !/opera/.test( userAgent ),
+           mozilla: /mozilla/.test( userAgent ) && !/(compatible|webkit)/.test( userAgent )
+        };
+        
+        browser.version = (userAgent.match( /.+(?:rv|it|ra|ie|me)[/: ]([d.]+)/ ) || [])[1];
+        
+        return browser;
+    },
+    
     // Core functions
     core: {
         /* Constants */
@@ -202,36 +289,48 @@ var stats = Class.extend({
     
     // Set the data array 
     populate: function (data) {
+    
+        this._data = data.slice();
+        
         this.results = {
+            count: this._data.length,
+            confidence: {
+                probability: .95
+            },
+            data:       this._data.slice(),
+            dataSorted: (this._data.slice()).sort(this.core.sortNumbers),
             time: {}
         };
         
-        this._data = data.slice();
-        
-        this.results.count = this.count();
         return this._data;
     },
    
+
+    /*
+        
+        SET FUNCTIONS
+    
+    */
     setConfidenceProbability : function (p) {
         if (p > 1 || p < 0) { console.warn('error: bad parameter'); }
-        this.results.confidence = {};
         this.results.confidence.probability = p;
         return p;
     },
     
     setQuantiles: function (o) {
-        var n      = o.nb, // number of quantiles
-            method = o.method, // Method
+        var n      = o.nb,      // number of quantiles
+            method = o.method,  // Method
             ext    = o.withExtremities; // with extremities
             
         if (!method) { method = 1;     }
         if (!ext)    { ext    = false; }
         
-        this.results.quantiles = {};
-        
-        this.results.quantiles.nb = n;
-        this.results.quantiles.calc_method = method;
-        this.results.quantiles.w_extremities = ext;
+        this.results.quantiles = {
+            calc_method: method,
+            data: [],
+            nb: n,
+            w_extremities: ext
+        };
     },
    
     
@@ -240,9 +339,7 @@ var stats = Class.extend({
         CALCULATION FUNCTIONS
     
     */
-    
     count: function () {
-        this.results.count = this._data.length;
         return this.results.count;
     },
     
@@ -254,6 +351,15 @@ var stats = Class.extend({
     max: function () {
         this.results.max = Math.max.apply(0, this._data);
         return this.results.max;
+    },
+        
+    range: function () {
+        /*
+            The range is calculated as the difference between the largest and smallest data value.
+        */
+        this.results.range = this.max() - this.min();
+        
+        return this.results.range;
     },
     
     sum: function () {
@@ -374,14 +480,82 @@ var stats = Class.extend({
         
         return fVar;
     },
+    
+    quantile: function (q, method, withExtremities) {
+        var population = this._data.slice(),
+            q = this.results.quantiles.nb,
+            method = this.results.quantiles.calc_method,
+            withExtremities = this.results.quantiles.w_extremities,
+            ctx = this,
+            k, p, q_re,
+            q_quantile = [], m = [];
         
-    range: function () {
-        /*
-            The range is calculated as the difference between the largest and smallest data value.
-        */
-        this.results.range = this.max() - this.min();
+        // 1. Order population
+        population.sort(ctx.core.sortNumbers);
         
-        return this.results.range;
+        // 2. Length of population
+        var N = population.length;
+        
+        // 3. Choice of method
+        if (!method || method < 1 || method > 9) { method = 1; }
+        
+        // Definitions of methods
+        m.push(function (p) { // Method 1
+            /*
+                Inverse of empirical distribution function.
+                When p = 0, use x1.
+            */
+            var h = N * p + 1/2;
+            
+            if (p==0) { return population[0]; }
+            
+            return population[Math.ceil(h - 1/2) - 1];
+        });
+        
+        m.push(function (p) { // Method 2 // KO
+            /*
+                The same as R-1, but with averaging at discontinuities.
+                When p = 0, x1.
+                When p = 1, use xN.
+            */
+            var h = N * p + 1/2;
+            
+            if (p==0) { return population[0]; }
+            if (p==1) { return population[N - 1]; }
+            
+            return (population[Math.ceil(h - 1/2) - 1] + population[Math.floor(h + 1/2) - 1]) / 2;
+        });
+        
+        m.push(function (p) { // Method 3 // KO
+            /*
+                The observation numbered closest to Np.
+                When p = (1/2) / N, use x1.
+            */
+            var h = N * p;
+            
+            if (p <= ((1/2)/N)) { return population[0]; }
+            
+            return population[ctx.core.round(h,0) - 1];
+        });
+        
+        if (q > 100) { q = 100; }
+        
+        for (k = 0; k <= q; k++) {
+            // Calc p
+            p = k / q;
+            q_quantile.push(m[method - 1](p));
+        }
+        
+        if (withExtremities != true) {
+            var _length = q_quantile.length;
+            q_re = q_quantile;
+            q_quantile = [];
+            
+            for (k=1; k<_length - 1; k++) { q_quantile.push(q_re[k]); }
+        }
+        
+        this.results.quantiles.data = q_quantile;
+        return q_quantile;
     },
     
     Q1: function () {
@@ -525,112 +699,113 @@ var stats = Class.extend({
         return p;   
     },
     
-    quantile: function (q, method, withExtremities) {
-        var population = this._data.slice(),
-            q = this.results.quantiles.nb,
-            method = this.results.quantiles.calc_method,
-            withExtremities = this.results.quantiles.w_extremities,
-            ctx = this,
-            k, p, q_re,
-            q_quantile = [], m = [];
+    prob_values: function (method) {
+        var r = this._data.slice(),
+            n = r.length,            
+            out = [];
         
-        // 1. Order population
-        population.sort(ctx.core.sortNumbers);
+        if (method == undefined) { method = 'benard'; }
+        r.sort(this.core.sortNumbers);
         
-        // 2. Length of population
-        var N = population.length;
-        
-        // 3. Choice of method
-        if (!method || method < 1 || method > 9) { method = 1; }
-        
-        // Definitions of methods
-        m.push(function (p) { // Method 1
-            /*
-                Inverse of empirical distribution function.
-                When p = 0, use x1.
-            */
-            var h = N * p + 1/2;
+        var benard = function () {
+            var out = [];
+            for (var i = 1; i<n+1; i++) {
+                out.push((i-.3)/(n+.4));
+            }
             
-            if (p==0) { return population[0]; }
-            
-            return population[Math.ceil(h - 1/2) - 1];
-        });
-        
-        m.push(function (p) { // Method 2 // KO
-            /*
-                The same as R-1, but with averaging at discontinuities.
-                When p = 0, x1.
-                When p = 1, use xN.
-            */
-            var h = N * p + 1/2;
-            
-            if (p==0) { return population[0]; }
-            if (p==1) { return population[N - 1]; }
-            
-            return (population[Math.ceil(h - 1/2) - 1] + population[Math.floor(h + 1/2) - 1]) / 2;
-        });
-        
-        m.push(function (p) { // Method 3 // KO
-            /*
-                The observation numbered closest to Np.
-                When p = (1/2) / N, use x1.
-            */
-            var h = N * p;
-            
-            if (p <= ((1/2)/N)) { return population[0]; }
-            
-            return population[ctx.core.round(h,0) - 1];
-        });
-        
-        if (q > 100) { q = 100; }
-        
-        for (k = 0; k <= q; k++) {
-            // Calc p
-            p = k / q;
-            q_quantile.push(m[method - 1](p));
-        }
-        
-        if (withExtremities != true) {
-            var _length = q_quantile.length;
-            q_re = q_quantile;
-            q_quantile = [];
-            
-            for (k=1; k<_length - 1; k++) { q_quantile.push(q_re[k]); }
-        }
-        
-        this.results.quantiles.data = q_quantile;
-        return q_quantile;
-    },
-    
-    prob_values: function () {
-        var data = this.core.percent_values.slice(),
-            n = data.length,
-            esp = this.mean(),
-            ec = this.stDev(),
-            i, r1 = [], r2 = [],
-            range, min, max,
-            offset = s.core.normalStdInverse(0.999);
-        
-        for (i=0; i<n; i++) { r1.push(this.core.normalStdInverse(data[i]/100)*ec+esp); }
-       
-        data = this._data.slice();
-        data.sort(this.core.sortNumbers);
-        
-        n = data.length;
-        range = this.range();
-        min = this.min();
-        max = this.max();
-        
-        for (i=0; i<n; i++) {
-            r2.push(this.core.normale(data[i], esp, ec));
-        }
-        //this.core.standardNormalCDF((m - esp)/ec)*100
-        this.results.prob_values = {
-            theorical: r1.slice(),
-            calc: r2.slice()
+            return out;
         };
         
-        return this.results.prob_values;
+        var herd_johnson = function () {
+            var out = [];
+            for (var i = 1; i<n+1; i++) {
+                out.push(i/(n+1));
+            }
+            
+            return out;
+        };
+        
+        var hazen = function () {
+            var out = [];
+            if (n != 0) {
+                for (var i = 1; i<n+1; i++) {
+                    out.push((i-.5)/n);
+                }
+            }
+            
+            return out;
+        };
+        
+        var kaplan_meier = function () {
+            var out = [];
+            if (n != 0) {
+                for (var i = 1; i<n+1; i++) {
+                    out.push(i/n);
+                }
+            }
+            
+            return out;
+        };
+        
+        switch (method) {
+            case 'benard':
+                out = benard();
+                break;
+            case 'herd-johnson':
+                out = herd_johnson();
+                break;
+            case 'hazen':
+                out = hazen();
+                break;
+            case 'kaplan-meier':
+                out = kaplan_meier();
+                break;
+            default:
+                method = 'bad parameter';
+                out = [];
+                break;
+        }
+        
+        this.results.diagram = {};
+        this.results.diagram.method = method;
+        this.results.diagram.availMethods = ['benard', 'herd-johnson', 'hazen', 'kaplan-meier'];
+        this.results.diagram.values = out;
+        return this.results.diagram;
+    },
+    
+    histo_values: function (o) {
+        var d = this.results.dataSorted.slice();
+        var nbInter,
+            arrInter = [],
+            min      = this.min(),
+            max      = this.max(),
+            range    = this.range(),
+            n        = this.results.count;
+        
+        if (!o) { o = {}; }
+        
+        nbInter = o.nbIntervals ? o.nbIntervals : 10;
+        
+        for(var i=0; i<nbInter; i++) {
+            arrInter.push({
+                min: min+i*range/nbInter, 
+                max: min+(i+1)*range/nbInter,
+                n: 0
+            });
+        }
+        
+        for(var i=0; i<n-1; i++) {
+            arrInter[parseInt((100*(d[i]-min)/range)/nbInter, 10)].n++;
+        }
+        arrInter[nbInter-1].n++;
+        
+        this.results.histogram = {
+            nbIntervals:    nbInter,
+            intervals:      arrInter,
+            width:          range/nbInter
+        };
+        
+        return this.results.histogram;
     },
     
     inverf: function (x) {
@@ -666,15 +841,7 @@ var stats = Class.extend({
     },
     
     cpk: function (tolMin, tolMax) {
-        var ec3 = 3 * this.ecartType();
-        var mean = this.mean();
-        
-        this.results.cpk = Math.min(
-            (mean - tolMin) / ec3,
-            (tolMax - mean) / ec3
-        );
-        
-        return this.results.cpk;
+        // CPK
     },
 
     LCI: function () {
@@ -709,6 +876,7 @@ var stats = Class.extend({
         this.p_value();
         this.quantile();
         this.prob_values();
+        this.histo_values();
         
         // Stop chrono
         d = new Date();
