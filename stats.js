@@ -12,6 +12,29 @@
  * 
  * Changelog :
  * 
+ * v 0.1.20140429-1
+ *      - improvements in constructor
+ *      - add stats.data() access to data
+ *      - add process limits (no history)
+ *          * setSpecificationLimit
+ *          * setUSL
+ *          * setLSL
+ *      - add meanDifference
+ *          * values for groups of 2
+ *          * Mean (EMMean)
+ *          * Median (EMMedian)
+ *      - add Capability values
+ *          * Cp
+ *          * Pp
+ *          * CPU
+ *          * PPU
+ *          * CPL
+ *          * PPL
+ *          * Cpk
+ *          * Ppk
+ *          * UCL (2 methods)
+ *          * LCL (2 methods)
+ * 
  * v 0.1.20140429
  *      - update licence
  *      - update "tested on"
@@ -71,6 +94,64 @@
 if (!stats) {
     var stats = function() {
         this.initialize && this.initialize.apply(this, arguments);
+        
+        this.isObject = function (obj) {
+            return (obj !== null && typeof obj === 'object');
+        };
+        
+        /* Default values */
+        this.results = {
+            count: 0,
+            confidence: {
+                probability: .95
+            },
+            data: [],
+            dataSorted: [],
+            diagram: {
+                method: "benard",
+                availMethods: [
+                    "benard",
+                    "herd-johnson",
+                    "hazen",
+                    "kaplan-meier"
+                ],
+                values: []
+            },
+            limits: {
+                LSL: null,
+                USL: null,
+                CL_methods: [
+                    'median',
+                    'mean'
+                ],
+                CL_method: 'median'
+            },
+            quantiles: {
+                calc_method: 1,
+                data: [],
+                nb: 4,
+                w_extremities: false
+            },
+            time: {
+                start: null,
+                stop: null,
+                ellapsed: 0
+            }
+        };
+        
+        if (this.isObject(arguments[0])) {
+            var arg = arguments[0];
+                        
+            if (!Array.isArray(arg.data)) { throw "data is not an Array !"; }
+            this.populate(arg.data);
+            
+            if (arg.confidenceProbability)      { this.setConfidenceProbability(arg.confidenceProbability); }
+            if (this.isObject(arg.quantiles))   { this.setQuantiles(arg.quantiles); }
+            if (this.isObject(arg.limits))      {
+                if (arg.limits.USL) { this.setUSL(arg.limits.USL); }
+                if (arg.limits.LSL) { this.setLSL(arg.limits.LSL); }
+            }
+        }
     };
 }
 
@@ -87,19 +168,6 @@ if (!stats.extend) {
     };
 }
 
-/*
- * Stats
- * JS Stats library
- * 
- * author : E. Liorzou
- * 
- * Functions : 
- * 
- * Populate :
- *  Add data to Array
- *
- * 
- */
 stats = stats.extend({
     browser: function () {
         /**
@@ -138,6 +206,16 @@ stats = stats.extend({
         LN_SQRT_PI:     0.5723649429247                 ,
 
         percent_values: [.1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 20, 30, 40, 50, 60, 70, 80, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 99.9],
+        
+        control: {
+            coeffs: {
+                taille: [ 2    , 3    , 4    , 5    , 6    , 7    , 8    , 9    , 10   , 11  , 12    , 13   , 14   , 15   , 16   , 17   , 18   , 19   , 20    ],
+                A2:     [ 1.880, 1.023, 0.729, 0.577, 0.483, 0.419, 0.373, 0.337, 0.308, 0.285, 0.266, 0.249, 0.235, 0.223, 0.212, 0.203, 0.194, 0.187, 0.180 ],
+                D3:     [ 0.000, 0.000, 0.000, 0.000, 0.000, 0.076, 0.136, 0.184, 0.223, 0.256, 0.284, 0.308, 0.329, 0.348, 0.364, 0.379, 0.392, 0.404, 0.414 ],
+                D4:     [ 3.267, 2.575, 2.282, 2.115, 2.004, 1.924, 1.864, 1.816, 1.777, 1.744, 1.716, 1.692, 1.671, 1.652, 1.636, 1.621, 1.608, 1.596, 1.586 ],
+                Sigma:  [ 1.128, 1.693, 2.059, 2.326, 2.534, 2.707, 2.847, 2.970, 3.078, 3.173, 3.258, 3.336, 3.407, 3.472, 3.532, 3.588, 3.640, 3.689, 3.735 ]
+            }
+        },
         
         // Sort functions
         sortNumbers: function (a, b) { return a - b },
@@ -296,19 +374,16 @@ stats = stats.extend({
     
         this._data = data.slice();
         
-        this.results = {
-            count: this._data.length,
-            confidence: {
-                probability: .95
-            },
-            data:       this._data.slice(),
-            dataSorted: (this._data.slice()).sort(this.core.sortNumbers),
-            time: {}
-        };
+        this.results.count      = this._data.length;
+        this.results.data       = this._data.slice();
+        this.results.dataSorted = (this._data.slice()).sort(this.core.sortNumbers);
         
         return this._data;
     },
    
+    data: function () {
+        return this._data.slice();
+    },
 
     /*
         
@@ -326,17 +401,36 @@ stats = stats.extend({
             method = o.method,  // Method
             ext    = o.withExtremities; // with extremities
             
-        if (!method) { method = 1;     }
-        if (!ext)    { ext    = false; }
+        if (!method) { method = this.results.quantiles.method; }
+        if (!ext)    { ext    = this.results.quantiles.w_extremities; }
+        if (!n)      { n      = this.results.quantiles.nb; }
         
-        this.results.quantiles = {
-            calc_method: method,
-            data: [],
-            nb: n,
-            w_extremities: ext
-        };
+        this.results.quantiles.calc_method = method;
+        this.results.quantiles.nb = n;
+        this.results.quantiles.w_extremities = ext;
+
     },
-   
+    
+    setSpecificationLimits: function (lsl, usl) {
+        /* Specification limits */
+        this.setLSL(lsl);
+        this.setUSL(usl);
+    },
+    
+    setUSL: function (usl) {
+        /* Upper specification limits */
+        this.results.limits.USL = usl;
+    },
+    
+    setLSL: function (lsl) {
+        /* Lower specification limits */
+        this.results.limits.LSL = lsl;
+    },
+    
+    setMethodControlLimits: function (method) {
+        if (this.limits.CL_methods.indexOf(method) != -1) { this.limits.CL_method = method; }
+    },
+    
     
     /*
         
@@ -430,6 +524,44 @@ stats = stats.extend({
         
         this.results.trMean = res;
         return res;
+    },
+    
+    meanDifference: function () {
+        var n = this.count(),
+            d = this.data(),
+            md = [];
+            
+        for(var i=1; i<n; i++) {
+            md.push(Math.abs(d[i]-d[i-1]));
+        }
+        
+        return md;
+    },
+    
+    EMMean: function () {
+        var d = this.meanDifference(),
+            n = d.length,
+            mean = 0;
+            
+        for (var i=0;i<n;i++) {
+            mean += d[i]/n;
+        }
+        
+        this.results.EMMean = mean;
+        return mean;
+    },
+    
+    EMMedian: function () {
+        var d = this.meanDifference(),
+            n = d.length,
+            med = 0;
+            
+        if (this.core.isPair(n)) {
+            med = (d[(n / 2) - 1] + d[((n / 2) + 1) - 1]) / 2;
+        } else { med = d[(n - 1) / 2]; }
+        
+        this.results.EMMedian = med;
+        return med;
     },
     
     median: function () {
@@ -769,10 +901,8 @@ stats = stats.extend({
                 out = [];
                 break;
         }
-        
-        this.results.diagram = {};
+
         this.results.diagram.method = method;
-        this.results.diagram.availMethods = ['benard', 'herd-johnson', 'hazen', 'kaplan-meier'];
         this.results.diagram.values = out;
         return this.results.diagram;
     },
@@ -844,15 +974,130 @@ stats = stats.extend({
         return this.results.confidence.interval;
     },
     
-    cpk: function (tolMin, tolMax) {
-        // CPK
+    LSL: function () {
+        return this.results.limits.LSL;
     },
-
-    LCI: function () {
-        // Calculer la moyenne de l'etendue mobile
-        // cf Minitab
+    
+    USL: function () {
+        return this.results.limits.USL;
     },
+    
+    Cp: function () {
+        var usl = this.USL(),
+            lsl = this.LSL(),
+            Sst = this.stDev();
+            
+        this.results.Cp = (usl - lsl) / (6 * Sst);
         
+        return this.results.Cp;
+    },
+    
+    Pp: function () {
+        var usl = this.USL(),
+            lsl = this.LSL(),
+            Slt = this.stDev();
+            
+        this.results.Pp = (usl - lsl) / (6 * Slt);
+        
+        return this.results.Pp;
+    },
+    
+    CPU: function () {
+        var usl     = this.USL(),
+            x_barre = this.mean(),
+            Sst     = this.stDev();
+            
+        this.results.CPU = (usl - x_barre) / (3*Sst);
+        
+        return this.results.CPU;
+    },
+    
+    PPU: function () {
+        var usl     = this.USL(),
+            x_barre = this.mean(),
+            Slt     = this.stDev();
+            
+        this.results.PPU = (usl - x_barre) / (3*Slt);
+        
+        return this.results.PPU;
+    },
+    
+    CPL: function () {
+        var lsl     = this.LSL(),
+            x_barre = this.mean(),
+            Sst     = this.stDev();
+            
+        this.results.CPL = (x_barre - lsl) / (3*Sst);
+        
+        return this.results.CPL;
+    },
+    
+    PPL: function () {
+        var lsl     = this.LSL(),
+            x_barre = this.mean(),
+            Slt     = this.stDev();
+            
+        this.results.PPL = (x_barre - lsl) / (3*Slt);
+        
+        return this.results.PPL;
+    }, 
+    
+    Cpk: function () {
+        this.results.Cpk = Math.min(this.CPU(), this.CPL());
+        return this.results.Cpk;
+    },
+    
+    Ppk: function () {
+        this.results.Ppk = Math.min(this.PPU(), this.PPL());
+        return this.results.Ppk;
+    },
+    
+    ControlLimits: function () {
+        var x_barre       = this.mean(),
+            r_barre       = this.EMMedian(),
+            mr_barre      = this.EMMean(),
+            
+            lcl           = undefined,
+            ucl           = undefined,
+            
+            mean_method   = function () {
+                lcl = x_barre - 3.14*r_barre;
+                ucl = x_barre + 3.14*r_barre;
+            },
+            
+            median_method = function () {
+                lcl = x_barre - 2.66*mr_barre;
+                ucl = x_barre + 2.66*mr_barre;
+            };
+            
+            switch (this.results.limits.CL_method) {
+                case 'mean':
+                    mean_method();
+                    break;
+                case 'median':
+                    median_method();
+                    break;
+                default: // mean by default
+                    mean_method();
+                    break;
+            }
+            
+            this.results.LCL = lcl;
+            this.results.UCL = ucl;
+            
+            return [lcl, ucl];
+    },
+    
+    UCL: function () {            
+        this.results.UCL = this.ControlLimits()[1];
+        return this.results.UCL;
+    },
+    
+    LCL: function () {
+        this.results.LCL = this.ControlLimits()[0];;
+        return this.results.LCL;
+    },
+    
     // Execute all functions
     executeAll: function () {
         // Start Chrono
@@ -882,6 +1127,19 @@ stats = stats.extend({
         this.prob_values();
         this.histo_values();
         
+        // Capability
+        this.Cp();
+        this.Pp();
+        this.CPU();
+        this.PPU();
+        this.CPL();
+        this.PPL();
+        this.Cpk();
+        this.Ppk();
+        this.UCL();
+        this.LCL();
+
+
         // Stop chrono
         d = new Date();
         this.results.time.stop = d;
