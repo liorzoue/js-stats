@@ -12,6 +12,12 @@
  * 
  * Changelog :
  * 
+ * v 0.1.20140513
+ *      - add stats.count()
+ *      - all data access are with .data() method
+ *      - fix bug in .meanDifference()
+ *      - patch bug with floats in .histo_values()
+ * 
  * v 0.1.20140429-1
  *      - improvements in constructor
  *      - add stats.data() access to data
@@ -118,8 +124,8 @@ if (!stats) {
                 values: []
             },
             limits: {
-                LSL: null,
-                USL: null,
+                LSL: undefined,
+                USL: undefined,
                 CL_methods: [
                     'median',
                     'mean'
@@ -366,6 +372,10 @@ stats = stats.extend({
             }
             
             return ltqnorm(p);
+        },
+    
+        findMax: function (arr) {
+            return Math.max.apply(0, arr);
         }
     },
     
@@ -442,12 +452,12 @@ stats = stats.extend({
     },
     
     min: function () {
-        this.results.min = Math.min.apply(0, this._data);
+        this.results.min = Math.min.apply(0, this.data())
         return this.results.min;
     },
     
     max: function () {
-        this.results.max = Math.max.apply(0, this._data);
+        this.results.max = this.core.findMax(this.data());
         return this.results.max;
     },
         
@@ -456,14 +466,13 @@ stats = stats.extend({
             The range is calculated as the difference between the largest and smallest data value.
         */
         this.results.range = this.max() - this.min();
-        
         return this.results.range;
     },
     
     sum: function () {
         var nbElem = this.results.count;
         var sum = 0;
-        var arr = this._data;
+        var arr = this.data();
         var i;
         for (i = 0; i < nbElem; i++) { sum += parseFloat(arr[i]); }
         
@@ -477,12 +486,12 @@ stats = stats.extend({
             A commonly used measure of the center of a batch of numbers, which is also called the average.
             It is the sum of all observations divided by the number of (nonmissing) observations.
         */
-        if (this._data == undefined) {
+        if (this.data() == undefined) {
             throw 'no data! use populate(data) function before.';
             return false;
         }
         
-        var nbElem, sum = 0, i, arr = this._data, res;
+        var nbElem, sum = 0, i, arr = this.data(), res;
 
         nbElem = arr.length;
 
@@ -500,7 +509,7 @@ stats = stats.extend({
             and then calculates the mean of the remaining values. 
         */
         
-        if (this._data == undefined) {
+        if (this.data() == undefined) {
             throw 'no data! use populate(data) function before.';
             return false;
         }
@@ -509,7 +518,7 @@ stats = stats.extend({
             nbToRemove = Math.round(0.05*nbElem),
             d;
             
-        d = this._data.slice();
+        d = this.data();
         d.sort();
         
         if (nbToRemove != 0) {
@@ -535,7 +544,7 @@ stats = stats.extend({
             md.push(Math.abs(d[i]-d[i-1]));
         }
         
-        return md;
+        return md.slice();
     },
     
     EMMean: function () {
@@ -569,7 +578,7 @@ stats = stats.extend({
             The median is in the middle of the data:
             half the observations are less than or equal to it, and half are greater than or equal to it. 
         */
-        if (this._data == undefined) {
+        if (this.data() == undefined) {
             throw 'no data! use populate(data) function before.';
             return false;
         }
@@ -577,7 +586,7 @@ stats = stats.extend({
         var i,
             nbElem,
             med,
-            arr = this._data;
+            arr = this.data();
 
         arr.sort(this.core.sortNumbers);
         
@@ -595,10 +604,10 @@ stats = stats.extend({
         /*
             Variance is a measure of how far the data are spread about the mean.
         */
-        var arr = this._data;
+        var arr = this.data();
         var i, nbElem, fMoy, fVar, fTmp;
 
-        nbElem = this.results.count;
+        nbElem = this.count();
         fMoy = parseFloat(this.mean());
         fVar = 0;
         for (i = 0; i < nbElem; i++) {
@@ -618,7 +627,7 @@ stats = stats.extend({
     },
     
     quantile: function (q, method, withExtremities) {
-        var population = this._data.slice(),
+        var population = this.data(),
             q = this.results.quantiles.nb,
             method = this.results.quantiles.calc_method,
             withExtremities = this.results.quantiles.w_extremities,
@@ -702,7 +711,7 @@ stats = stats.extend({
         var w = (this.results.count+1)/4;
         var y = this.core.truncate(w);
         var z = w-y;
-        var x = this._data;
+        var x = this.data();
         
         // JS Arrays are 0-indexed
         y--;
@@ -722,7 +731,7 @@ stats = stats.extend({
         var w = 3*(this.results.count+1)/4;
         var y = this.core.truncate(w);
         var z = w-y;
-        var x = this._data;
+        var x = this.data();
         
         // JS Arrays are 0-indexed
         y--;
@@ -786,8 +795,8 @@ stats = stats.extend({
             The statistic is a squared distance that is weighted more heavily in the tails of the distribution.
             Smaller Anderson-Darling values indicates that the distribution fits the data better.
         */
-        var n = this.results.count,
-            X = this._data.slice(),
+        var n = this.count(),
+            X = this.data(),
             m = this.mean(),
             stDev = this.stDev(),
             sum = 0,
@@ -800,6 +809,7 @@ stats = stats.extend({
         for(i=1; i<=n; i++) {
             j = i-1;
             Y = sncdf((X[j] - m)/stDev);
+            Y = (Math.abs(Y) < 1e-10) ? 0 : Y;
             sum += (2*i - 1)*Math.log(Y) + (2*n + 1 - 2*i)*Math.log(1 - Y);
         }
         
@@ -836,7 +846,7 @@ stats = stats.extend({
     },
     
     prob_values: function (method) {
-        var r = this._data.slice(),
+        var r = this.data(),
             n = r.length,            
             out = [];
         
@@ -928,10 +938,12 @@ stats = stats.extend({
             });
         }
         
-        for(var i=0; i<n-1; i++) {
-            arrInter[parseInt((100*(d[i]-min)/range)/nbInter, 10)].n++;
+        for(var i=0; i<n; i++) {
+            var pos = parseInt((100*(d[i]-min)/range)/nbInter, 10);
+            
+            if (pos >= nbInter) { pos = nbInter-1; }
+            arrInter[pos].n++;
         }
-        arrInter[nbInter-1].n++;
         
         this.results.histogram = {
             nbIntervals:    nbInter,
