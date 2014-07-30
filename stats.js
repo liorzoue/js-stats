@@ -11,7 +11,10 @@
  * Licence : GNU
  * 
  * Changelog :
- * 
+ *  *
+ * v 0.1.20140730
+ *      - clean up some messy things
+ *
  * v 0.1.20140513
  *      - add stats.count()
  *      - all data access are with .data() method
@@ -234,7 +237,7 @@ stats = stats.extend({
         
         // Check functions
         isPair: function (iValue) {
-            if ((iValue / 2) == parseInt(iValue / 2)) { return true; } else { return false; }
+            return (iValue / 2) == parseInt(iValue / 2);
         }, 
         
         // Truncate number
@@ -340,12 +343,12 @@ stats = stats.extend({
                 else if (p == 0)
                 {
                     // errno = ERANGE;
-                    return Number.NEGATIVE_INFINITY; /* minus "infinity" */;
+                    return Number.NEGATIVE_INFINITY; /* minus "infinity" */
                 }
                 else if (p == 1)
                 {
                     // errno = ERANGE;
-                    return Number.POSITIVE_INFINITY; /* "infinity" */;
+                    return Number.POSITIVE_INFINITY; /* "infinity" */
                 }
                 else if (p < LOW)
                 {
@@ -369,7 +372,7 @@ stats = stats.extend({
                     return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q /
                         (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
                 }
-            }
+            };
             
             return ltqnorm(p);
         },
@@ -452,7 +455,7 @@ stats = stats.extend({
     },
     
     min: function () {
-        this.results.min = Math.min.apply(0, this.data())
+        this.results.min = Math.min.apply(0, this.data());
         return this.results.min;
     },
     
@@ -488,7 +491,6 @@ stats = stats.extend({
         */
         if (this.data() == undefined) {
             throw 'no data! use populate(data) function before.';
-            return false;
         }
         
         var nbElem, sum = 0, i, arr = this.data(), res;
@@ -511,7 +513,6 @@ stats = stats.extend({
         
         if (this.data() == undefined) {
             throw 'no data! use populate(data) function before.';
-            return false;
         }
         //TODO: Verify output value..
         var nbElem = this.results.count,
@@ -546,7 +547,10 @@ stats = stats.extend({
         
         return md.slice();
     },
-    
+
+    /**
+     * @return {number}
+     */
     EMMean: function () {
         var d = this.meanDifference(),
             n = d.length,
@@ -559,7 +563,10 @@ stats = stats.extend({
         this.results.EMMean = mean;
         return mean;
     },
-    
+
+    /**
+     * @return {number}
+     */
     EMMedian: function () {
         var d = this.meanDifference(),
             n = d.length,
@@ -580,11 +587,9 @@ stats = stats.extend({
         */
         if (this.data() == undefined) {
             throw 'no data! use populate(data) function before.';
-            return false;
         }
         
-        var i,
-            nbElem,
+        var nbElem,
             med,
             arr = this.data();
 
@@ -628,12 +633,13 @@ stats = stats.extend({
     
     quantile: function (q, method, withExtremities) {
         var population = this.data(),
-            q = this.results.quantiles.nb,
-            method = this.results.quantiles.calc_method,
-            withExtremities = this.results.quantiles.w_extremities,
             ctx = this,
             k, p, q_re,
             q_quantile = [], m = [];
+
+        q = this.results.quantiles.nb;
+        method = this.results.quantiles.calc_method;
+        withExtremities = this.results.quantiles.w_extremities;
         
         // 1. Order population
         population.sort(ctx.core.sortNumbers);
@@ -788,7 +794,10 @@ stats = stats.extend({
         
         return this.results.coefVar;
     },
-    
+
+    /**
+     * @return {number}
+     */
     Anderson_Darling: function () {
         /*
             Measures the area between the fitted line (based on chosen distribution) and the nonparametric step function (based on the plot points).
@@ -922,8 +931,8 @@ stats = stats.extend({
         var nbInter,
             arrInter = [],
             min      = this.min(),
-            max      = this.max(),
             range    = this.range(),
+
             n        = this.results.count;
         
         if (!o) { o = {}; }
@@ -938,7 +947,7 @@ stats = stats.extend({
             });
         }
         
-        for(var i=0; i<n; i++) {
+        for(i=0; i<n; i++) {
             var pos = parseInt((100*(d[i]-min)/range)/nbInter, 10);
             
             if (pos >= nbInter) { pos = nbInter-1; }
@@ -1106,7 +1115,7 @@ stats = stats.extend({
     },
     
     LCL: function () {
-        this.results.LCL = this.ControlLimits()[0];;
+        this.results.LCL = this.ControlLimits()[0];
         return this.results.LCL;
     },
     
