@@ -1079,18 +1079,20 @@ stats = stats.extend({
     
     ControlLimits: function () {
         var x_barre       = this.mean(),
-            r_barre       = this.EMMedian(),
-            mr_barre      = this.EMMean(),
             
             lcl           = undefined,
             ucl           = undefined,
             
             mean_method   = function () {
+                var r_barre   = this.EMMedian();
+
                 lcl = x_barre - 3.14*r_barre;
                 ucl = x_barre + 3.14*r_barre;
             },
             
             median_method = function () {
+                var mr_barre  = this.EMMean();
+                
                 lcl = x_barre - 2.66*mr_barre;
                 ucl = x_barre + 2.66*mr_barre;
             };
