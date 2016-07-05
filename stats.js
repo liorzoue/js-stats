@@ -812,6 +812,10 @@ stats = stats.extend({
             sncdf = this.core.standardNormalCDF,
             A2, Y, i, j;
         
+        if (stDev == 0) {
+            this.results.Anderson_Darling = 0;
+            return 0;
+        }
         // sort data
         X.sort(this.core.sortNumbers);
         
